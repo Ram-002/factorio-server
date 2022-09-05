@@ -28,5 +28,5 @@ jobs:
           context: .
           platforms: linux/arm64
           push: true
-          tags: factorio-server-arm64/app:latest
+          tags: ghcr.io/ram042/factorio-docker-arm64:latest
             
