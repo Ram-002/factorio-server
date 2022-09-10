@@ -38,7 +38,7 @@ jobs:
         run: |
           docker run --rm factorio:test --version
   push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: "Push image"
     needs: [build-arm64, build-test-amd64]
     if: ${{ github.ref == 'refs/heads/multiarch' }}
@@ -59,26 +59,43 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Log in to the Container registry
-        uses: docker/login-action@v2
+        uses: redhat-actions/podman-login@v1
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push arm64
+      - name: Build arm64
         uses: docker/build-push-action@v3
         with:
           context: .
           file: arm64.dockerfile
           platforms: linux/arm64
-          push: false
           load: true
-          tags: ${{ steps.meta.outputs.tags }}
-      - name: Build and push amd64
+          tags: factorio:arm64
+      - name: Build amd64
         uses: docker/build-push-action@v3
         with:
           context: .
           file: amd64.dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-
+          load: true
+          tags: factorio:amd64
+      - name: Generate and push manifest
+        shell: bash
+        run: |
+          set -x
+          buildah manifest create factorio
+          buildah pull docker-daemon:factorio:arm64
+          buildah pull docker-daemon:factorio:amd64
+          buildah manifest add factorio docker-daemon:factorio:arm64
+          buildah manifest add factorio docker-daemon:factorio:amd64
+          
+          add_tags=$( echo "${{ steps.meta.outputs.tags }}" | cut -s -d "," -f2- )
+          if [ -n "$add_tags" ]; then
+            add_tags="--additional-tag=$add_tags"
+            echo "$add_tags"
+            skopeo copy -a containers-storage:localhost/factorio $( ${{ steps.meta.outputs.tags }} | cut -d "," -f1 ) $add_tags 
+          else 
+            skopeo copy -a containers-storage:localhost/factorio "docker://${{ steps.meta.outputs.tags }}"
+          fi
+          
 
